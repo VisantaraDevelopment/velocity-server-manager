@@ -20,8 +20,7 @@ public class ServerKickListener {
         // connection, keep Velocity's default behavior so they remain on that previous server.
         if (event.kickedDuringServerConnect() && event.getPlayer().getCurrentServer().isPresent()) return;
         String kickedServer = event.getServer().getServerInfo().getName();
-        ServerManager.getRandomLimboExcluding(kickedServer)
-                .or(() -> ServerManager.getRandomLobbyExcluding(kickedServer))
+        ServerManager.getRandomFallbackExcluding(kickedServer)
                 .ifPresent(destination -> event.setResult(KickedFromServerEvent.RedirectPlayer.create(destination)));
     }
 }

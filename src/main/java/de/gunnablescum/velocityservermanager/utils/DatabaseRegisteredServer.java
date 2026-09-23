@@ -39,7 +39,7 @@ public record DatabaseRegisteredServer(String name, String address, int port, by
         if(server.isEmpty()) return;
         for(Player all : server.get().getPlayersConnected()) {
             if (!force && all.hasPermission("servermanager.ignorekick")) continue;
-            Optional<RegisteredServer> destination = ServerManager.getRandomLobbyExcluding(name);
+            Optional<RegisteredServer> destination = ServerManager.getRandomFallbackExcluding(name);
             if (destination.isPresent()) {
                 all.createConnectionRequest(destination.get()).connect();
                 all.sendMessage(force ? Messages.previousServerDeletedInfo() : Messages.previousServerEmptied());

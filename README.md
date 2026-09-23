@@ -13,6 +13,7 @@ Check out the original Plugin on SpigotMC here: [BungeeServerManager \[BungeeCor
  * Receive notifications when servers go online or offline
  * Kick all players from a specific server to a random lobby
  * Redirect players to limbo when their current server kicks them, with lobby fallback
+ * Announce server restarts with lobby bossbars and balanced player evacuation
  * Manage Server Flags to customize server behavior
  * /hub or /lobby command to go to a lobby server, separate from limbo servers
  * Configurable messages
@@ -68,6 +69,7 @@ Have fun configuring to your heart's desire.
  * `servermanager.servers.reload` - Reload server data from the database and re-add them to the proxy.
  * `servermanager.servers.list` - List all servers in your network.
  * `servermanager.servers.kick` - Kick all players from a specific server to a random lobby.
+ * `servermanager.servers.restart` - Announce a server restart, show a lobby bossbar, and evacuate its players.
  * `servermanager.ignorekick` - Be exempt from being kicked when a server is cleared.
  * `servermanager.servers.info` - View information about a specific server.
  * `servermanager.servers.flags` - Manage Server flags. Check [here](#flags) for more info.
@@ -88,15 +90,16 @@ Have fun configuring to your heart's desire.
 - `[flagserver]` - Add a flag to a server
 - `[unflagserver]` - Remove a flag from a server
 - `[clearserver, kickserver]` - Kicks all players from the specific server to a random lobby
+- `[serveradmin restart <server> [estimated-seconds]]` - Announces a restart, moves players evenly across available hubs, and shows a countdown bossbar to players in hubs. The estimate defaults to 120 seconds; after it reaches zero, the bar remains until the server responds to a ping again.
 - `[servermanager]` - A unified command for every action
 
 ## Flags
 Flags identify server roles and conditions.
  * `EMPTY (Bitvalue: 0)` - No flags set
- * `LOBBY (Bitvalue: 1)` - Players are sent here when they join, use `/hub`, and as the fallback after a backend kick.
+ * `LOBBY (Bitvalue: 1)` - Hub servers. Players are sent here when they join, use `/hub`, and as the first fallback after a backend kick.
  * `RESTRICTED (Bitvalue: 2)` - This server is restricted. Only players with the `servermanager.server.*` or `servermanager.ignorerestriction` permission can join.
  * `DISABLED (Bitvalue: 4)` - This server is disabled. Players cannot join this server, not even staff. If you want this server to be joinable by only staff, use RESTRICTED instead.
- * `LIMBO (Bitvalue: 16)` - A separate server role for limbo servers. Kick redirection prefers these servers; `/hub` never selects them.
+ * `LIMBO (Bitvalue: 16)` - A separate server role for limbo servers. Fallbacks use limbo if all hubs are offline; `/hub` never selects limbo.
 
 **NOTE: Flags of Servers are stored in the database. Please do not tamper with the database manually unless you know exactly what you are doing. I will not fix any bugs where the database has been manually tampered with. You are on your own.**
 

@@ -16,6 +16,7 @@ import de.gunnablescum.velocityservermanager.listener.ServerSwitchListener;
 import de.gunnablescum.velocityservermanager.utils.DatabaseRegisteredServer;
 import de.gunnablescum.velocityservermanager.utils.Messages;
 import de.gunnablescum.velocityservermanager.utils.MySQL;
+import de.gunnablescum.velocityservermanager.utils.RestartAnnouncementManager;
 import de.gunnablescum.velocityservermanager.utils.ServerPinger;
 import org.slf4j.Logger;
 
@@ -62,6 +63,7 @@ public class ServerManager {
     public static volatile Map<String, DatabaseRegisteredServer> serverRegistry = Map.of();
 
     private static ServerManager instance;
+    private RestartAnnouncementManager restartAnnouncements;
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "velocity-server-manager-db");
         thread.setDaemon(true);
@@ -73,6 +75,7 @@ public class ServerManager {
     public void onProxyInitialization(ProxyInitializeEvent event) {
         instance = this;
         logger.info("Initializing VelocityServerManager...");
+        restartAnnouncements = new RestartAnnouncementManager(this);
 
         // Register listeners and commands during Velocity's initialization phase. Their database
         // work waits for the asynchronous startup task below to finish.
@@ -104,6 +107,7 @@ public class ServerManager {
 
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
+        if (restartAnnouncements != null) restartAnnouncements.stopAll();
         databaseExecutor.shutdown();
         MySQL.close();
     }
@@ -137,19 +141,51 @@ public class ServerManager {
     }
 
     public static Optional<RegisteredServer> getRandomLobby() {
-        return chooseRandom(lobbies);
+        return chooseRandom(available(lobbies));
     }
 
     public static Optional<RegisteredServer> getRandomLobbyExcluding(String serverName) {
-        return chooseRandom(lobbies.stream()
-                .filter(server -> !server.getServerInfo().getName().equalsIgnoreCase(serverName))
-                .toList());
+        return chooseRandom(availableExcluding(lobbies, serverName));
     }
 
-    public static Optional<RegisteredServer> getRandomLimboExcluding(String serverName) {
-        return chooseRandom(limbos.stream()
-                .filter(server -> !server.getServerInfo().getName().equalsIgnoreCase(serverName))
-                .toList());
+    public static Optional<RegisteredServer> getRandomFallback() {
+        return chooseRandom(getFallbackCandidatesExcluding(null));
+    }
+
+    public static Optional<RegisteredServer> getRandomFallbackExcluding(String serverName) {
+        return chooseRandom(getFallbackCandidatesExcluding(serverName));
+    }
+
+    public static List<RegisteredServer> getFallbackCandidatesExcluding(String serverName) {
+        List<RegisteredServer> onlineHubs = availableExcluding(lobbies, serverName);
+        if (!onlineHubs.isEmpty()) return onlineHubs;
+
+        List<RegisteredServer> availableLimbos = availableExcluding(limbos, serverName);
+        if (!availableLimbos.isEmpty()) return availableLimbos;
+
+        // If every hub is down, still attempt a configured limbo even when its last ping failed.
+        return limbos.stream()
+                .filter(server -> !hasName(server, serverName))
+                .toList();
+    }
+
+    private static List<RegisteredServer> available(List<RegisteredServer> servers) {
+        return servers.stream().filter(ServerManager::isOnlineOrUnknown).toList();
+    }
+
+    private static List<RegisteredServer> availableExcluding(List<RegisteredServer> servers, String serverName) {
+        return servers.stream()
+                .filter(ServerManager::isOnlineOrUnknown)
+                .filter(server -> !hasName(server, serverName))
+                .toList();
+    }
+
+    private static boolean isOnlineOrUnknown(RegisteredServer server) {
+        return !Boolean.FALSE.equals(serverStatusCache.get(server.getServerInfo().getName()));
+    }
+
+    private static boolean hasName(RegisteredServer server, String name) {
+        return name != null && server.getServerInfo().getName().equalsIgnoreCase(name);
     }
 
     private static Optional<RegisteredServer> chooseRandom(List<RegisteredServer> servers) {
@@ -174,6 +210,7 @@ public class ServerManager {
         new UnflagServerCommand(this, manager);
         new WhereAmICommand(this, manager);
         new SetServerCommand(this, manager);
+        new ServerAdminCommand(this, manager, restartAnnouncements);
     }
 
     private void registerListener() {
@@ -198,8 +235,13 @@ public class ServerManager {
         return proxyServer;
     }
 
+    public RestartAnnouncementManager getRestartAnnouncements() {
+        return restartAnnouncements;
+    }
+
     private void startServerPinging() {
         int checkDelay = 10;
+        ServerPinger.checkAllServers();
         proxyServer.getScheduler().buildTask(this, ServerPinger::checkAllServers)
                 .delay(checkDelay, TimeUnit.SECONDS)
                 .repeat(checkDelay, TimeUnit.SECONDS)

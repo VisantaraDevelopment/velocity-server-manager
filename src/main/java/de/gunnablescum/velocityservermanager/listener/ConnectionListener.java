@@ -17,7 +17,7 @@ public class ConnectionListener {
     @Subscribe
     public void onJoin(ServerPreConnectEvent e) {
         if (e.getPreviousServer() != null) return;
-        ServerManager.getRandomLobby().ifPresent(lobby ->
-                e.setResult(ServerPreConnectEvent.ServerResult.allowed(lobby)));
+        ServerManager.getRandomFallback().ifPresent(fallback ->
+                e.setResult(ServerPreConnectEvent.ServerResult.allowed(fallback)));
     }
 }

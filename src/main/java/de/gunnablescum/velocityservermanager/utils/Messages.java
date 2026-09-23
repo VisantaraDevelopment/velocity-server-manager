@@ -40,6 +40,11 @@ public class Messages {
     private static String SERVER_ALREADY_EXISTS;
     private static String NO_LOBBY_AVAILABLE;
     private static String SERVER_DETAILS_UPDATED_BROADCAST;
+    private static String SERVER_RESTART_ANNOUNCEMENT;
+    private static String SERVER_RESTART_BOSSBAR;
+    private static String SERVER_RESTART_ALREADY_RUNNING;
+    private static String SERVER_RESTART_NO_DESTINATION;
+    private static String SERVER_ADMIN_USAGE;
     private static String FLAGS_UPDATED;
     private static String SERVER_ONLINE_BROADCAST;
     private static String SERVER_OFFLINE_BROADCAST;
@@ -81,6 +86,11 @@ public class Messages {
         SERVER_ALREADY_EXISTS           = config.getString("Messages.SERVER_ALREADY_EXISTS", "");
         NO_LOBBY_AVAILABLE              = config.getString("Messages.NO_LOBBY_AVAILABLE", "<red>No lobby server is configured.");
         SERVER_DETAILS_UPDATED_BROADCAST = config.getString("Messages.SERVER_DETAILS_UPDATED_BROADCAST", "<gray>The address of server <yellow><server></yellow> has been updated by <admin>.");
+        SERVER_RESTART_ANNOUNCEMENT = config.getString("Messages.SERVER_RESTART_ANNOUNCEMENT", "<yellow><server> is restarting. Estimated time: <estimate>.");
+        SERVER_RESTART_BOSSBAR = config.getString("Messages.SERVER_RESTART_BOSSBAR", "<yellow><server> sedang restart, mohon menunggu... (estimasi <estimate>)");
+        SERVER_RESTART_ALREADY_RUNNING = config.getString("Messages.SERVER_RESTART_ALREADY_RUNNING", "<red>A restart announcement is already active for this server.");
+        SERVER_RESTART_NO_DESTINATION = config.getString("Messages.SERVER_RESTART_NO_DESTINATION", "<red>There is no available hub or limbo to evacuate players to.");
+        SERVER_ADMIN_USAGE = config.getString("Messages.SERVER_ADMIN_USAGE", "<yellow>/serveradmin restart <server> [estimated-seconds]");
         FLAGS_UPDATED                   = config.getString("Messages.FLAGS_UPDATED", "");
         SERVER_ONLINE_BROADCAST         = config.getString("Messages.SERVER_ONLINE_BROADCAST", "");
         SERVER_OFFLINE_BROADCAST        = config.getString("Messages.SERVER_OFFLINE_BROADCAST", "");
@@ -106,6 +116,34 @@ public class Messages {
                 Placeholder.unparsed("admin", admin),
                 Placeholder.unparsed("server", serverName)
         ));
+    }
+
+    public static Component serverRestartAnnouncement(String serverName, String estimate) {
+        return PREFIX.append(mm.deserialize(
+                SERVER_RESTART_ANNOUNCEMENT,
+                Placeholder.unparsed("server", serverName),
+                Placeholder.unparsed("estimate", estimate)
+        ));
+    }
+
+    public static Component serverRestartBossBar(String serverName, String estimate) {
+        return mm.deserialize(
+                SERVER_RESTART_BOSSBAR,
+                Placeholder.unparsed("server", serverName),
+                Placeholder.unparsed("estimate", estimate)
+        );
+    }
+
+    public static Component restartAlreadyRunning() {
+        return PREFIX.append(mm.deserialize(SERVER_RESTART_ALREADY_RUNNING));
+    }
+
+    public static Component restartNoDestination() {
+        return PREFIX.append(mm.deserialize(SERVER_RESTART_NO_DESTINATION));
+    }
+
+    public static Component serverAdminUsage() {
+        return PREFIX.append(mm.deserialize(SERVER_ADMIN_USAGE));
     }
 
     // One Variable
