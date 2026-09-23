@@ -1,6 +1,5 @@
 package de.gunnablescum.velocityservermanager.utils;
 
-import com.velocitypowered.api.proxy.server.RegisteredServer;
 import de.gunnablescum.velocityservermanager.ServerManager;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -14,7 +13,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Created by Noah Fetz on 20.05.2016.
@@ -84,7 +82,7 @@ public class MySQL {
         }
     }
 
-    public static void update(String qry, @Nullable List<SQLStatementParameter> parameters){
+    public static boolean update(String qry, @Nullable List<SQLStatementParameter> parameters){
         try(Connection connection = dataSource.getConnection()) {
             try(PreparedStatement ps = connection.prepareStatement(qry)) {
                 if (parameters != null) {
@@ -101,6 +99,7 @@ public class MySQL {
 
                 ps.executeUpdate();
                 connection.commit();
+                return true;
             } catch (SQLException e) {
                 try {
                     connection.rollback();
@@ -112,6 +111,7 @@ public class MySQL {
         } catch (SQLException e) {
             ServerManager.getInstance().getLogger().error("VelocityServerManager: Something went wrong while connecting to the database, error details are below.");
             e.printStackTrace();
+            return false;
         }
     }
 
@@ -165,48 +165,18 @@ public class MySQL {
         return List.of();
     }
 
-    public static List<DatabaseRegisteredServer> getAllServerWithLobbyFlag() {
-        List<DatabaseRegisteredServer> servers = new ArrayList<>();
-        try(
-                Connection connection= dataSource.getConnection();
-                PreparedStatement ps = connection.prepareStatement("SELECT * FROM servermanager_servers WHERE flags = ?");
-        ) {
-            ps.setByte(1,ServerFlag.LOBBY.bit);
-            ResultSet rs = ps.executeQuery();
-            while(rs.next()){
-                DatabaseRegisteredServer server = new DatabaseRegisteredServer(
-                        rs.getString("name"),
-                        rs.getString("ip"),
-                        rs.getInt("port"),
-                        rs.getByte("flags")
-                );
-                servers.add(server);
-            }
-            return servers;
-        } catch (SQLException e) {
-            ServerManager.getInstance().getLogger().error("VelocityServerManager: Something went wrong while connecting to the database, error details are below.");
-            e.printStackTrace();
-        }
-        return List.of();
-    }
-
-    public static void createServer(String name, String ip, int port) {
-        update("INSERT INTO servermanager_servers(name, ip, port, flags) VALUES(?, ?, ?, ?)", List.of(
+    public static boolean createServer(String name, String ip, int port) {
+        if (!update("INSERT INTO servermanager_servers(name, ip, port, flags) VALUES(?, ?, ?, ?)", List.of(
                 new SQLStatementParameter(SQLStatementParameterType.STRING, 1, name),
                 new SQLStatementParameter(SQLStatementParameterType.STRING, 2, ip),
                 new SQLStatementParameter(SQLStatementParameterType.INT, 3, port),
                 new SQLStatementParameter(SQLStatementParameterType.BYTE, 4, ServerFlag.EMPTY.bit)
-        ));
-        Objects.requireNonNull(getServer(name)).addToProxy();
-    }
-
-    public static void insertFallbackServer(RegisteredServer server) {
-        update("INSERT INTO servermanager_servers(name, ip, port, flags) VALUES(?, ?, ?, ?)", List.of(
-                new SQLStatementParameter(SQLStatementParameterType.STRING, 1, server.getServerInfo().getName()),
-                new SQLStatementParameter(SQLStatementParameterType.STRING, 2, server.getServerInfo().getAddress().getHostString()),
-                new SQLStatementParameter(SQLStatementParameterType.INT, 3, server.getServerInfo().getAddress().getPort()),
-                new SQLStatementParameter(SQLStatementParameterType.BYTE, 4, ServerFlag.PROXY_MANAGED.bit) // 2 = Don't manage with VSM
-        ));
+        ))) return false;
+        DatabaseRegisteredServer server = getServer(name);
+        if (server == null) return false;
+        server.addToProxy();
+        ServerManager.getInstance().refreshServerRegistry();
+        return true;
     }
 
     public static void deleteServer(String name) {
@@ -215,11 +185,21 @@ public class MySQL {
         ));
     }
 
-    public static void insertFallbackServers(List<RegisteredServer> servers) {
-        servers.forEach(MySQL::insertFallbackServer);
+    /**
+     * Remove transient rows written by older releases for velocity.toml servers, and map the
+     * earlier combined lobby/limbo value to the dedicated limbo bit.
+     */
+    public static void migrateLegacyServerFlags() {
+        update("DELETE FROM servermanager_servers WHERE flags IN (9, 13)", null);
+        update("UPDATE servermanager_servers SET flags = ? WHERE flags = ?", List.of(
+                new SQLStatementParameter(SQLStatementParameterType.BYTE, 1, ServerFlag.LIMBO.bit),
+                new SQLStatementParameter(SQLStatementParameterType.BYTE, 2, (byte) 5)
+        ));
     }
 
-    public static void deleteFallbackServers() {
-        update("DELETE FROM servermanager_servers WHERE flags = 9", null);
+    public static void close() {
+        if (dataSource != null && !dataSource.isClosed()) {
+            dataSource.close();
+        }
     }
 }

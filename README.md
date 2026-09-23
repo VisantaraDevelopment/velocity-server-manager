@@ -12,8 +12,9 @@ Check out the original Plugin on SpigotMC here: [BungeeServerManager \[BungeeCor
  * Servers are saved in a MySQL Database
  * Receive notifications when servers go online or offline
  * Kick all players from a specific server to a random lobby
+ * Redirect players to limbo when their current server kicks them, with lobby fallback
  * Manage Server Flags to customize server behavior
- * /hub or /lobby command to go to a lobby server
+ * /hub or /lobby command to go to a lobby server, separate from limbo servers
  * Configurable messages
 
 ## Known Issues.
@@ -33,8 +34,9 @@ You'll need:
 3. Start your Proxy to generate the default configuration files. It will shutdown automatically due to a missing database connection.
 4. Open the generated `mysql.yml` file in a text editor and fill in the details for a valid database connection.
 5. Start your Proxy again. The plugin should connect to the database and create the necessary tables.
-6. (Optional, but **_encouraged_**) Remove all servers that are not fallback servers from your `velocity.toml`. Instead, add them using `/addserver` either ingame or in the console. Refer to [here](#commands).
-7. (Optional) Configure the messages in `messages.yml` to your liking.
+6. Add each managed server with `/addserver <name> <host> <port>`, or adopt a server already listed in `velocity.toml` with `/setserver <name> <host> <port>`. VSM stores its address in the database and applies address changes while the proxy is running.
+7. Mark at least one server as a lobby with `/flagserver <name> lobby`. Mark a limbo server with `/flagserver <name> limbo`; `/hub` ignores limbo servers, while backend kick redirection prefers limbo and falls back to a lobby.
+8. (Optional) Configure the messages in `messages.yml` to your liking.
 
 You are now ready to use Velocity Server Manager! Have fun managing your servers on the fly, dynamically.
 
@@ -61,6 +63,7 @@ Have fun configuring to your heart's desire.
  * `servermanager.help` - See the help list.
  * `servermanager.notify` - Receive notifications when somebody manages servers.
  * `servermanager.servers.add` - Add servers to your network.
+ * `servermanager.servers.edit` - Change a server's host and port while the proxy is running.
  * `servermanager.servers.delete` - Delete servers from your network.
  * `servermanager.servers.reload` - Reload server data from the database and re-add them to the proxy.
  * `servermanager.servers.list` - List all servers in your network.
@@ -77,6 +80,7 @@ Have fun configuring to your heart's desire.
 - `[goto, jumpto]` - Go to a player's current server
 - `[whereami, wai]` - Find which server you are currently on
 - `[addserver]` - Adds a server to your network
+- `[setserver, editserver]` - Changes a server's host and port while the proxy is running
 - `[delserver]` - Deletes a server from your network
 - `[reloadserver]` - Reloads the data of a specific server or all servers in the network
 - `[serverlist, sl]` - Lists all servers in your network
@@ -87,14 +91,12 @@ Have fun configuring to your heart's desire.
 - `[servermanager]` - A unified command for every action
 
 ## Flags
-Flags are how to plugin identifies servers and their conditions. Some are immutable.
+Flags identify server roles and conditions.
  * `EMPTY (Bitvalue: 0)` - No flags set
- * `LOBBY (Bitvalue: 1)` - This server is a lobby server. Players will be sent here when they join the proxy or are kicked from another server.
+ * `LOBBY (Bitvalue: 1)` - Players are sent here when they join, use `/hub`, and as the fallback after a backend kick.
  * `RESTRICTED (Bitvalue: 2)` - This server is restricted. Only players with the `servermanager.server.*` or `servermanager.ignorerestriction` permission can join.
  * `DISABLED (Bitvalue: 4)` - This server is disabled. Players cannot join this server, not even staff. If you want this server to be joinable by only staff, use RESTRICTED instead.
- * `PROXYMANAGED (Bitvalue: 9)` - This server is managed by the proxy. This flag is immutable and applies to all servers added in the `velocity.toml` file. If this flag is present, you cannot apply any other flags.
-
-**NOTE: Bitvalue 9 means that the PROXYMANAGED flag is a combination of the LOBBY flag and itself. This is intentional to encourage people to only put fallback servers into their `velocity.toml` file.**<br>
+ * `LIMBO (Bitvalue: 16)` - A separate server role for limbo servers. Kick redirection prefers these servers; `/hub` never selects them.
 
 **NOTE: Flags of Servers are stored in the database. Please do not tamper with the database manually unless you know exactly what you are doing. I will not fix any bugs where the database has been manually tampered with. You are on your own.**
 

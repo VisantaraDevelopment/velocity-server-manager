@@ -13,20 +13,23 @@ import de.gunnablescum.velocityservermanager.utils.Messages;
  */
 public class WhereAmICommand implements SimpleCommand {
 
+    private final ServerManager plugin;
 
     public WhereAmICommand(ServerManager plugin, CommandManager manager) {
+        this.plugin = plugin;
         manager.register(manager.metaBuilder("whereami").aliases("wai").plugin(plugin).build(), this);
     }
 
     @Override
     public void execute(Invocation invocation) {
         CommandSource source = invocation.source();
-        if (!(source instanceof Player p)) {
-            source.sendMessage(Messages.onlyIngameCommand());
-            return;
-        }
-
-        //noinspection OptionalGetWithoutIsPresent <- The client cannot send commands while not being connected to a server.
-        p.sendMessage(Messages.whereAmIServerInfo(p.getCurrentServer().get().getServerInfo().getName()));
+        plugin.runAsync(() -> {
+            if (!(source instanceof Player p)) {
+                source.sendMessage(Messages.onlyIngameCommand());
+                return;
+            }
+            p.getCurrentServer().ifPresent(connection ->
+                    p.sendMessage(Messages.whereAmIServerInfo(connection.getServerInfo().getName())));
+        });
     }
 }

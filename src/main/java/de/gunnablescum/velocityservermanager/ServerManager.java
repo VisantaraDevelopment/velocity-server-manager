@@ -4,7 +4,6 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandManager;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
-import com.velocitypowered.api.event.proxy.ProxyPingEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
@@ -18,15 +17,19 @@ import de.gunnablescum.velocityservermanager.utils.DatabaseRegisteredServer;
 import de.gunnablescum.velocityservermanager.utils.Messages;
 import de.gunnablescum.velocityservermanager.utils.MySQL;
 import de.gunnablescum.velocityservermanager.utils.ServerPinger;
-import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Created by Noah Fetz on 20.05.2016.
@@ -51,51 +54,110 @@ public class ServerManager {
     @DataDirectory
     private Path dataDirectory;
 
-    public static final List<RegisteredServer> lobbies = new ArrayList<>();
-    public static final Map<String, Boolean> serverStatusCache = new HashMap<>();
+    /** Registered database servers explicitly marked as lobbies. */
+    public static volatile List<RegisteredServer> lobbies = List.of();
+    /** Registered database servers explicitly marked as limbos. */
+    public static volatile List<RegisteredServer> limbos = List.of();
+    public static final Map<String, Boolean> serverStatusCache = new ConcurrentHashMap<>();
+    public static volatile Map<String, DatabaseRegisteredServer> serverRegistry = Map.of();
 
     private static ServerManager instance;
+    private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "velocity-server-manager-db");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final CompletableFuture<Void> initialized = new CompletableFuture<>();
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
         instance = this;
         logger.info("Initializing VelocityServerManager...");
-        MySQL.init();
-        if(!MySQL.isConnected()) return; // Huh?
 
-        // In case of an ungraceful shutdown, delete all Fallback Servers from Database
-        MySQL.deleteFallbackServers();
-
-        Messages.loadMessages();
-
+        // Register listeners and commands during Velocity's initialization phase. Their database
+        // work waits for the asynchronous startup task below to finish.
         registerCommands();
         registerListener();
-        startServerPinging();
 
-        addFallbackServersToLobbies();
-        MySQL.insertFallbackServers(lobbies);
+        CompletableFuture.runAsync(() -> {
+            MySQL.init();
+            if (!MySQL.isConnected()) {
+                throw new IllegalStateException("VelocityServerManager could not connect to the database.");
+            }
 
-        DatabaseRegisteredServer.addAllServers();
-        logger.info("VelocityServerManager has been successfully initialized!");
+            MySQL.migrateLegacyServerFlags();
+            Messages.loadMessages();
+            DatabaseRegisteredServer.addAllServers();
+            refreshServerRegistry();
+            startServerPinging();
+            logger.info("VelocityServerManager has been successfully initialized!");
+        }, databaseExecutor).whenComplete((ignored, error) -> {
+            if (error == null) {
+                initialized.complete(null);
+            } else {
+                logger.error("VelocityServerManager initialization failed.", error);
+                initialized.completeExceptionally(error);
+                proxyServer.shutdown();
+            }
+        });
     }
 
     @Subscribe
-    public void onProxyShutdown(ProxyShutdownEvent e) {
-        // Delete all Fallback Servers from Database
-        MySQL.deleteFallbackServers();
+    public void onProxyShutdown(ProxyShutdownEvent event) {
+        databaseExecutor.shutdown();
+        MySQL.close();
     }
 
-    private void addFallbackServersToLobbies() {
-        lobbies.addAll(proxyServer.getAllServers());
+    public CompletableFuture<Void> runAsync(Runnable operation) {
+        return initialized.thenRunAsync(operation, databaseExecutor)
+                .exceptionally(error -> {
+                    logger.error("VelocityServerManager could not complete an asynchronous operation.", error);
+                    return null;
+                });
     }
 
-    @Subscribe
-    public void onProxyPing(ProxyPingEvent event){
-        if(MySQL.isConnected()) return;
-        proxyServer.shutdown(Component.text("VelocityServerManager couldn't connect to the Database. Shutting down Proxy."));
+    /** Refreshes the read-only routing cache after loading or changing database records. */
+    public synchronized void refreshServerRegistry() {
+        List<DatabaseRegisteredServer> servers = MySQL.getAllServers();
+        serverRegistry = servers.stream().collect(Collectors.toUnmodifiableMap(
+                DatabaseRegisteredServer::name,
+                server -> server,
+                (first, second) -> second
+        ));
+        lobbies = servers.stream()
+                .filter(DatabaseRegisteredServer::isLobby)
+                .map(DatabaseRegisteredServer::getFromProxy)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        limbos = servers.stream()
+                .filter(DatabaseRegisteredServer::isLimbo)
+                .map(DatabaseRegisteredServer::getFromProxy)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
-    private void registerCommands(){
+    public static Optional<RegisteredServer> getRandomLobby() {
+        return chooseRandom(lobbies);
+    }
+
+    public static Optional<RegisteredServer> getRandomLobbyExcluding(String serverName) {
+        return chooseRandom(lobbies.stream()
+                .filter(server -> !server.getServerInfo().getName().equalsIgnoreCase(serverName))
+                .toList());
+    }
+
+    public static Optional<RegisteredServer> getRandomLimboExcluding(String serverName) {
+        return chooseRandom(limbos.stream()
+                .filter(server -> !server.getServerInfo().getName().equalsIgnoreCase(serverName))
+                .toList());
+    }
+
+    private static Optional<RegisteredServer> chooseRandom(List<RegisteredServer> servers) {
+        if (servers.isEmpty()) return Optional.empty();
+        return Optional.of(servers.get(ThreadLocalRandom.current().nextInt(servers.size())));
+    }
+
+    private void registerCommands() {
         CommandManager manager = proxyServer.getCommandManager();
         new AddServerCommand(this, manager);
         new ClearServerCommand(this, manager);
@@ -111,9 +173,10 @@ public class ServerManager {
         new FlagServerCommand(this, manager);
         new UnflagServerCommand(this, manager);
         new WhereAmICommand(this, manager);
+        new SetServerCommand(this, manager);
     }
 
-    private void registerListener(){
+    private void registerListener() {
         new ServerKickListener(this);
         new ConnectionListener(this);
         new ServerSwitchListener(this);
@@ -135,8 +198,11 @@ public class ServerManager {
         return proxyServer;
     }
 
-    private void startServerPinging(){
+    private void startServerPinging() {
         int checkDelay = 10;
-        proxyServer.getScheduler().buildTask(this, ServerPinger::checkAllServers).delay(checkDelay, TimeUnit.SECONDS).repeat(checkDelay, TimeUnit.SECONDS).schedule();
+        proxyServer.getScheduler().buildTask(this, ServerPinger::checkAllServers)
+                .delay(checkDelay, TimeUnit.SECONDS)
+                .repeat(checkDelay, TimeUnit.SECONDS)
+                .schedule();
     }
 }

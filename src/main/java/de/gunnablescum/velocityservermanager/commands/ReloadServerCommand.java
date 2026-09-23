@@ -24,26 +24,32 @@ public class ReloadServerCommand extends VSMCommand {
         LiteralCommandNode<CommandSource> enableServerNode = BrigadierCommand.literalArgumentBuilder("reloadserver")
             .requires(source -> source.hasPermission("servermanager.servers.reload"))
                 .executes(context -> {
-                    for(DatabaseRegisteredServer server : MySQL.getAllServers()) {
-                        server.reloadInProxy();
-                    }
-                    sendPermittedBroadcast(Messages.allServerReloadBroadcast(getResponsible(context)));
+                    runAsync(() -> {
+                        for (DatabaseRegisteredServer server : MySQL.getAllServers()) {
+                            server.reloadInProxy();
+                        }
+                        plugin.refreshServerRegistry();
+                        sendPermittedBroadcast(Messages.allServerReloadBroadcast(getResponsible(context)));
+                    });
                     return Command.SINGLE_SUCCESS;
                 })
             .then(BrigadierCommand.requiredArgumentBuilder("server", StringArgumentType.word())
                 .suggests((ctx, builder) -> {
-                    proxyServer.getAllServers().forEach(server -> builder.suggest(server.getServerInfo().getName()));
+                    suggestRegisteredServers(builder);
                     return builder.buildFuture();
                 })
                 .executes(context -> {
-                    String server = StringArgumentType.getString(context, "server");
-                    DatabaseRegisteredServer target = MySQL.getServer(server);
-                    if(target == null) {
-                        context.getSource().sendMessage(Messages.serverNotFound());
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    target.reloadInProxy();
-                    sendPermittedBroadcast(Messages.serverReloadedBroadcast(getResponsible(context), server));
+                    runAsync(() -> {
+                        String server = StringArgumentType.getString(context, "server");
+                        DatabaseRegisteredServer target = MySQL.getServer(server);
+                        if (target == null) {
+                            context.getSource().sendMessage(Messages.serverNotFound());
+                            return;
+                        }
+                        target.reloadInProxy();
+                        plugin.refreshServerRegistry();
+                        sendPermittedBroadcast(Messages.serverReloadedBroadcast(getResponsible(context), server));
+                    });
                     return Command.SINGLE_SUCCESS;
                 }))
             .build();

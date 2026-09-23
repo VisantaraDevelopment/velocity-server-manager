@@ -29,7 +29,7 @@ public class GotoCommand {
         LiteralCommandNode<CommandSource> gotoNode = BrigadierCommand.literalArgumentBuilder("goto")
                 .requires(source -> source.hasPermission("servermanager.goto"))
                 .executes(context -> {
-                    context.getSource().sendMessage(Messages.gotoDescription());
+                    ServerManager.getInstance().runAsync(() -> context.getSource().sendMessage(Messages.gotoDescription()));
                     return Command.SINGLE_SUCCESS;
                 })
                 .then(BrigadierCommand.requiredArgumentBuilder("player", StringArgumentType.string())
@@ -38,22 +38,28 @@ public class GotoCommand {
                             return builder.buildFuture();
                         })
                 ).executes(context -> {
-                    if(!(context.getSource() instanceof Player p)) {
-                        context.getSource().sendMessage(Messages.onlyIngameCommand());
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    String pname = StringArgumentType.getString(context, "player");
-                    Optional<Player> p2 = proxy.getPlayer(pname);
-                    if(p2.isEmpty()){
-                        p.sendMessage(Messages.gotoPlayerOffline(pname));
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    RegisteredServer target = p2.get().getCurrentServer().get().getServer();
-                    if(p.getCurrentServer().get().getServer() != target) {
-                        p.createConnectionRequest(target).connect().thenAccept(result -> p.sendMessage(Messages.gotoConnected(pname)));
-                    } else {
-                        p.sendMessage(Messages.gotoAlreadyOnServer(pname));
-                    }
+                    ServerManager.getInstance().runAsync(() -> {
+                        if (!(context.getSource() instanceof Player p)) {
+                            context.getSource().sendMessage(Messages.onlyIngameCommand());
+                            return;
+                        }
+                        String pname = StringArgumentType.getString(context, "player");
+                        Optional<Player> p2 = proxy.getPlayer(pname);
+                        if (p2.isEmpty()) {
+                            p.sendMessage(Messages.gotoPlayerOffline(pname));
+                            return;
+                        }
+                        Optional<RegisteredServer> target = p2.get().getCurrentServer().map(connection -> connection.getServer());
+                        if (target.isEmpty()) {
+                            p.sendMessage(Messages.gotoPlayerOffline(pname));
+                            return;
+                        }
+                        if (p.getCurrentServer().map(connection -> connection.getServer()).filter(target.get()::equals).isEmpty()) {
+                            p.createConnectionRequest(target.get()).connect().thenAccept(result -> p.sendMessage(Messages.gotoConnected(pname)));
+                        } else {
+                            p.sendMessage(Messages.gotoAlreadyOnServer(pname));
+                        }
+                    });
                     return Command.SINGLE_SUCCESS;
                 }).build();
 

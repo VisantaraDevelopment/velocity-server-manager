@@ -10,7 +10,6 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 
 import javax.annotation.Nullable;
 import java.net.InetSocketAddress;
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,8 +21,11 @@ public record DatabaseRegisteredServer(String name, String address, int port, by
 
     public static void addAllServers() {
         for(DatabaseRegisteredServer server : MySQL.getAllServers()){
-            if (!server.active()) continue;
-            server.addToProxy();
+            if (server.active()) {
+                server.addToProxy();
+            } else {
+                server.removeFromProxy();
+            }
         }
     }
 
@@ -37,8 +39,13 @@ public record DatabaseRegisteredServer(String name, String address, int port, by
         if(server.isEmpty()) return;
         for(Player all : server.get().getPlayersConnected()) {
             if (!force && all.hasPermission("servermanager.ignorekick")) continue;
-            all.createConnectionRequest(ServerManager.lobbies.get(new SecureRandom().nextInt(ServerManager.lobbies.size()))).connect();
-            all.sendMessage(force ? Messages.previousServerDeletedInfo() : Messages.previousServerEmptied());
+            Optional<RegisteredServer> destination = ServerManager.getRandomLobbyExcluding(name);
+            if (destination.isPresent()) {
+                all.createConnectionRequest(destination.get()).connect();
+                all.sendMessage(force ? Messages.previousServerDeletedInfo() : Messages.previousServerEmptied());
+            } else {
+                all.disconnect(force ? Messages.previousServerDeletedInfo() : Messages.previousServerEmptied());
+            }
         }
     }
 
@@ -48,12 +55,17 @@ public record DatabaseRegisteredServer(String name, String address, int port, by
     }
 
     public void addToProxy() {
-        ServerManager.getInstance().getProxyServer().registerServer(new ServerInfo(name, new InetSocketAddress(address, port)));
+        ProxyServer proxy = ServerManager.getInstance().getProxyServer();
+        proxy.getServer(name).ifPresent(existing -> proxy.unregisterServer(existing.getServerInfo()));
+        proxy.registerServer(new ServerInfo(name, new InetSocketAddress(address, port)));
     }
 
     public void reloadInProxy() {
-        removeFromProxy();
-        addToProxy();
+        if (active()) {
+            addToProxy();
+        } else {
+            removeFromProxy();
+        }
     }
 
     @Nullable
@@ -63,25 +75,47 @@ public record DatabaseRegisteredServer(String name, String address, int port, by
 
     public void deleteFromDatabase() {
         MySQL.deleteServer(name);
+        ServerManager.getInstance().refreshServerRegistry();
     }
 
     public boolean setFlag(ServerFlag flag) {
         int newFlags = flags | flag.bit;
         if (flags == newFlags) return false;
-        MySQL.update("UPDATE servermanager_servers SET flags = ? WHERE name = ?", List.of(
+        if (!MySQL.update("UPDATE servermanager_servers SET flags = ? WHERE name = ?", List.of(
                 new SQLStatementParameter(SQLStatementParameterType.INT, 1, newFlags),
                 new SQLStatementParameter(SQLStatementParameterType.STRING, 2, name)
-        ));
+        ))) return false;
+        if (flag == DISABLED) {
+            if ((newFlags & DISABLED.bit) == DISABLED.bit) removeFromProxy();
+            else addToProxy();
+        }
+        ServerManager.getInstance().refreshServerRegistry();
         return true;
     }
 
     public boolean unsetFlag(ServerFlag flag) {
         int newFlags = flags & ~flag.bit;
         if (flags == newFlags) return false;
-        MySQL.update("UPDATE servermanager_servers SET flags = ? WHERE name = ?", List.of(
+        if (!MySQL.update("UPDATE servermanager_servers SET flags = ? WHERE name = ?", List.of(
                 new SQLStatementParameter(SQLStatementParameterType.INT, 1, newFlags),
                 new SQLStatementParameter(SQLStatementParameterType.STRING, 2, name)
-        ));
+        ))) return false;
+        if (flag == DISABLED && (newFlags & DISABLED.bit) == 0) addToProxy();
+        ServerManager.getInstance().refreshServerRegistry();
+        return true;
+    }
+
+    public boolean updateDetails(String newAddress, int newPort) {
+        if (address.equals(newAddress) && port == newPort) return false;
+        if (!MySQL.update("UPDATE servermanager_servers SET ip = ?, port = ? WHERE name = ?", List.of(
+                new SQLStatementParameter(SQLStatementParameterType.STRING, 1, newAddress),
+                new SQLStatementParameter(SQLStatementParameterType.INT, 2, newPort),
+                new SQLStatementParameter(SQLStatementParameterType.STRING, 3, name)
+        ))) return false;
+        if (active()) {
+            reloadInProxy();
+        }
+        ServerManager.getInstance().refreshServerRegistry();
         return true;
     }
 
@@ -125,12 +159,12 @@ public record DatabaseRegisteredServer(String name, String address, int port, by
         source.sendMessage(mm.deserialize("<gray>Players<dark_gray>: " + players));
     }
 
-    public boolean isProxyManaged() {
-        return hasFlag(PROXY_MANAGED);
+    public boolean isLobby() {
+        return active() && hasFlag(LOBBY) && !hasFlag(LIMBO);
     }
 
-    public boolean isProxyManagedLimbo(){
-        return hasFlag(PROXY_MANAGED_LIMBO);
+    public boolean isLimbo() {
+        return active() && hasFlag(LIMBO);
     }
 
     public boolean hasFlag(ServerFlag flag) {

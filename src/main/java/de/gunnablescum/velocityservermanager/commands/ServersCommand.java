@@ -8,7 +8,6 @@ import de.gunnablescum.velocityservermanager.utils.DatabaseRegisteredServer;
 import de.gunnablescum.velocityservermanager.utils.Messages;
 import de.gunnablescum.velocityservermanager.utils.MySQL;
 import de.gunnablescum.velocityservermanager.utils.ServerFlag;
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
 import java.util.ArrayList;
@@ -41,8 +40,13 @@ public class ServersCommand implements RawCommand {
 
     @Override
     public void execute(Invocation invocation) {
+        ServerManager.getInstance().runAsync(() -> executeDatabaseCommand(invocation));
+    }
+
+    private void executeDatabaseCommand(Invocation invocation) {
         CommandSource source = invocation.source();
-        String[] args = invocation.arguments().split(" ");
+        String arguments = invocation.arguments().trim();
+        String[] args = arguments.isEmpty() ? new String[0] : arguments.split("\\s+");
         MiniMessage mm = MiniMessage.miniMessage();
 
         if (args.length == 0) {
@@ -85,11 +89,7 @@ public class ServersCommand implements RawCommand {
                         source.sendMessage(Messages.noPermission());
                         return;
                     }
-                    if (checkIfServerProxyManagedOrNull(source, targetServer)) {
-                        return;
-                    }
                     if (targetServer.unsetFlag(ServerFlag.DISABLED)) {
-                        targetServer.addToProxy();
                         sendPermittedBroadcast(Messages.flagsUpdated(getResponsible(source), targetServer.name(), ServerFlag.miniMessageFormatted(targetServer.flags() & ~ServerFlag.DISABLED.bit)));
                         return;
                     }
@@ -101,11 +101,7 @@ public class ServersCommand implements RawCommand {
                         source.sendMessage(Messages.noPermission());
                         return;
                     }
-                    if (checkIfServerProxyManagedOrNull(source, targetServer)) {
-                        return;
-                    }
                     if (targetServer.setFlag(ServerFlag.DISABLED)) {
-                        targetServer.removeFromProxy();
                         sendPermittedBroadcast(Messages.flagsUpdated(getResponsible(source), targetServer.name(), ServerFlag.miniMessageFormatted(targetServer.flags() | ServerFlag.DISABLED.bit)));
                         return;
                     }
@@ -115,9 +111,6 @@ public class ServersCommand implements RawCommand {
                 case "delete" -> {
                     if(!source.hasPermission("servermanager.servers.delete")) {
                         source.sendMessage(Messages.noPermission());
-                        return;
-                    }
-                    if (checkIfServerProxyManagedOrNull(source, targetServer)) {
                         return;
                     }
                     targetServer.empty(true);
@@ -153,6 +146,7 @@ public class ServersCommand implements RawCommand {
 
         switch (flagOrIp.toUpperCase()) {
             case "LOBBY" -> flagValue = ServerFlag.LOBBY;
+            case "LIMBO" -> flagValue = ServerFlag.LIMBO;
             case "RESTRICTED" -> flagValue = ServerFlag.RESTRICTED;
             case "DISABLED" -> flagValue = ServerFlag.DISABLED;
             default -> flagValue = null;
@@ -169,9 +163,6 @@ public class ServersCommand implements RawCommand {
                         sendAvailableCommands(source, mm);
                         return;
                     }
-                    if (checkIfServerProxyManagedOrNull(source, targetServer)) {
-                        return;
-                    }
                     if (targetServer.setFlag(flagValue)) {
                         sendPermittedBroadcast(Messages.flagsUpdated(getResponsible(source), targetServer.name(), ServerFlag.miniMessageFormatted(targetServer.flags() | flagValue.bit)));
                         return;
@@ -185,9 +176,6 @@ public class ServersCommand implements RawCommand {
                     }
                     if (flagValue == null) {
                         sendAvailableCommands(source, mm);
-                        return;
-                    }
-                    if (checkIfServerProxyManagedOrNull(source, targetServer)) {
                         return;
                     }
                     if (targetServer.unsetFlag(flagValue)) {
@@ -227,7 +215,10 @@ public class ServersCommand implements RawCommand {
                 source.sendMessage(Messages.serverAlreadyExists());
                 return;
             }
-            MySQL.createServer(target, flagOrIp, port);
+            if (!MySQL.createServer(target, flagOrIp, port)) {
+                source.sendMessage(Messages.invalidArgs("SERVER_ADD_FAILED"));
+                return;
+            }
             sendPermittedBroadcast(Messages.serverAddedBroadcast(getResponsible(source), target));
         }
     }
@@ -240,6 +231,7 @@ public class ServersCommand implements RawCommand {
         source.sendMessage(Messages.PREFIX.append(mm.deserialize("<gray>The following commands are available to you<dark_gray>: <yellow>[optional] <needed>")));
         source.sendMessage(mm.deserialize("<yellow>/servermanager help <dark_gray>- <gray>Shows this help site"));
         if(source.hasPermission("servermanager.servers.add")) source.sendMessage(mm.deserialize("<yellow>/servermanager add <servername> <ip> <port> <dark_gray>- <gray>Adds a server to your network"));
+        if(source.hasPermission("servermanager.servers.edit")) source.sendMessage(mm.deserialize("<yellow>/setserver <servername> <ip> <port> <dark_gray>- <gray>Updates a server's host and port"));
         if(source.hasPermission("servermanager.servers.delete")) source.sendMessage(mm.deserialize("<yellow>/servermanager delete <servername> <dark_gray>- <gray>Deletes a server from your network"));
         if(source.hasPermission("servermanager.servers.reload")) source.sendMessage(mm.deserialize("<yellow>/servermanager reload [servername] <dark_gray>- <gray>Reloads the data of a specific server or all servers in the network"));
         if(source.hasPermission("servermanager.servers.list")) source.sendMessage(mm.deserialize("<yellow>/servermanager list <dark_gray>- <gray>Lists all servers in your network"));
@@ -258,8 +250,6 @@ public class ServersCommand implements RawCommand {
         CommandSource source = invocation.source();
         String[] args = invocation.arguments().split(" ");
         boolean addArg = invocation.arguments().endsWith(" ");
-        source.sendMessage(Component.text(invocation.arguments() + " | Length: " + args.length + " | AddArg: " + addArg));
-
         if (args.length == 1 && !addArg) {
             List<String> suggestions = new ArrayList<>();
             if(source.hasPermission("servermanager.servers.add")) suggestions.add("add");
@@ -311,7 +301,7 @@ public class ServersCommand implements RawCommand {
     }
 
     private List<String> suggestFlags(String arg) {
-        List<String> flags = List.of("lobby", "restricted", "disabled");
+        List<String> flags = List.of("lobby", "limbo", "restricted", "disabled");
         return flags.stream()
                 .filter(name -> name.startsWith(arg.toLowerCase()))
                 .toList();
@@ -321,8 +311,7 @@ public class ServersCommand implements RawCommand {
         if(!source.hasPermission("servermanager.servers.list")) {
             return List.of();
         }
-        return MySQL.getAllServers().stream()
-                .map(DatabaseRegisteredServer::name)
+        return ServerManager.serverRegistry.keySet().stream()
                 .filter(name -> name.toLowerCase().startsWith(arg.toLowerCase()))
                 .toList();
     }

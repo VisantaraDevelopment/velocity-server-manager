@@ -5,7 +5,6 @@ import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import de.gunnablescum.velocityservermanager.ServerManager;
 import de.gunnablescum.velocityservermanager.utils.DatabaseRegisteredServer;
 import de.gunnablescum.velocityservermanager.utils.Messages;
-import de.gunnablescum.velocityservermanager.utils.MySQL;
 import de.gunnablescum.velocityservermanager.utils.ServerFlag;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
@@ -23,11 +22,17 @@ public class ServerSwitchListener {
     public void onConnect(ServerPreConnectEvent e) {
         String serverTarget = e.getOriginalServer().getServerInfo().getName();
 
-        DatabaseRegisteredServer server = MySQL.getServer(serverTarget);
+        DatabaseRegisteredServer server = ServerManager.serverRegistry.get(serverTarget);
         if(server == null) return; // Shouldn't happen but IntelliJ pisses me off about this
 
+        if (!server.active()) {
+            e.getPlayer().sendMessage(Messages.serverNotActive());
+            e.setResult(ServerPreConnectEvent.ServerResult.denied());
+            return;
+        }
+
         if(server.hasFlag(ServerFlag.RESTRICTED)) {
-            if(!e.getPlayer().hasPermission("servermanager.server." + serverTarget) && !e.getPlayer().hasPermission("servermanager.ignorerestricion")) {
+            if(!e.getPlayer().hasPermission("servermanager.server." + serverTarget) && !e.getPlayer().hasPermission("servermanager.ignorerestriction")) {
                 MiniMessage mm = MiniMessage.miniMessage();
                 e.getPlayer().sendMessage(Messages.PREFIX.append(mm.deserialize("<red>You're not allowed to join this server.")));
                 e.setResult(ServerPreConnectEvent.ServerResult.denied());

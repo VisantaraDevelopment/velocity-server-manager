@@ -25,22 +25,24 @@ public class ClearServerCommand extends VSMCommand {
             .requires(source -> source.hasPermission("servermanager.servers.kick"))
             .then(BrigadierCommand.requiredArgumentBuilder("server", StringArgumentType.word())
                 .suggests((ctx, builder) -> {
-                    proxyServer.getAllServers().forEach(server -> builder.suggest(server.getServerInfo().getName()));
+                    suggestRegisteredServers(builder);
                     return builder.buildFuture();
                 })
                 .executes(context -> {
-                    String server = StringArgumentType.getString(context, "server");
-                    DatabaseRegisteredServer target = MySQL.getServer(server);
-                    if(target == null) {
-                        context.getSource().sendMessage(Messages.serverNotFound());
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    if (target.getFromProxy() == null || !target.active()) {
-                        context.getSource().sendMessage(Messages.serverNotActive());
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    target.empty(false);
-                    sendPermittedBroadcast(Messages.serverEmptiedBroadcast(getResponsible(context), server));
+                    runAsync(() -> {
+                        String server = StringArgumentType.getString(context, "server");
+                        DatabaseRegisteredServer target = MySQL.getServer(server);
+                        if (target == null) {
+                            context.getSource().sendMessage(Messages.serverNotFound());
+                            return;
+                        }
+                        if (target.getFromProxy() == null || !target.active()) {
+                            context.getSource().sendMessage(Messages.serverNotActive());
+                            return;
+                        }
+                        target.empty(false);
+                        sendPermittedBroadcast(Messages.serverEmptiedBroadcast(getResponsible(context), server));
+                    });
                     return Command.SINGLE_SUCCESS;
                 })).build();
 

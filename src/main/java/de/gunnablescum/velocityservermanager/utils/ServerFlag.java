@@ -5,9 +5,7 @@ public enum ServerFlag {
     LOBBY((byte) 1, "<yellow>Lobby</yellow>"),
     RESTRICTED((byte) 2, "<yellow>Restricted</yellow>"),
     DISABLED((byte) 4, "<yellow>Disabled</yellow>"),
-    LIMBO((byte) 5,"<yellow>Limbo Server</yellow>"),
-    PROXY_MANAGED((byte) 9, "<yellow>Proxy Managed</yellow>"),// Yes 9 because 8 (proxy_managed) + 1 (forced lobby);
-    PROXY_MANAGED_LIMBO((byte)13, "<yellow>Proxy Managed Limbo</yellow>"),;
+    LIMBO((byte) 16, "<yellow>Limbo</yellow>");
 
     public final byte bit;
     private final String name;
@@ -28,9 +26,7 @@ public enum ServerFlag {
             case 1 -> LOBBY;
             case 2 -> RESTRICTED;
             case 4 -> DISABLED;
-            case 5 -> LIMBO;
-            case 9 -> PROXY_MANAGED;
-            case 13-> PROXY_MANAGED_LIMBO;
+            case 16 -> LIMBO;
             default -> throw new IllegalArgumentException("No enum constant for bit value: " + bit);
         };
     }

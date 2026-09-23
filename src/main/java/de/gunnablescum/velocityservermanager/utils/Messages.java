@@ -36,9 +36,10 @@ public class Messages {
     private static String WHEREAMI_SERVER_INFO;
     private static String NO_ACTION_COMMITED;
     private static String INVALID_ARGS;
-    private static String SERVER_PROXY_MANAGED;
     private static String SERVER_ADDED_BROADCAST;
     private static String SERVER_ALREADY_EXISTS;
+    private static String NO_LOBBY_AVAILABLE;
+    private static String SERVER_DETAILS_UPDATED_BROADCAST;
     private static String FLAGS_UPDATED;
     private static String SERVER_ONLINE_BROADCAST;
     private static String SERVER_OFFLINE_BROADCAST;
@@ -77,8 +78,9 @@ public class Messages {
         WHEREAMI_SERVER_INFO            = config.getString("Messages.WHEREAMI_SERVER_INFO", "");
         NO_ACTION_COMMITED              = config.getString("Messages.NO_ACTION_COMMITED", "");
         INVALID_ARGS                    = config.getString("Messages.INVALID_ARGS", "");
-        SERVER_PROXY_MANAGED            = config.getString("Messages.SERVER_PROXY_MANAGED", "");
         SERVER_ALREADY_EXISTS           = config.getString("Messages.SERVER_ALREADY_EXISTS", "");
+        NO_LOBBY_AVAILABLE              = config.getString("Messages.NO_LOBBY_AVAILABLE", "<red>No lobby server is configured.");
+        SERVER_DETAILS_UPDATED_BROADCAST = config.getString("Messages.SERVER_DETAILS_UPDATED_BROADCAST", "<gray>The address of server <yellow><server></yellow> has been updated by <admin>.");
         FLAGS_UPDATED                   = config.getString("Messages.FLAGS_UPDATED", "");
         SERVER_ONLINE_BROADCAST         = config.getString("Messages.SERVER_ONLINE_BROADCAST", "");
         SERVER_OFFLINE_BROADCAST        = config.getString("Messages.SERVER_OFFLINE_BROADCAST", "");
@@ -95,8 +97,16 @@ public class Messages {
     public static Component onlyIngameCommand() { return PREFIX.append(mm.deserialize(ONLY_INGAME_COMMAND)); }
     public static Component alreadyOnLobby() { return PREFIX.append(mm.deserialize(LOBBY_ALREADY_ON_LOBBY)); }
     public static Component noActionCommited() { return PREFIX.append(mm.deserialize(NO_ACTION_COMMITED)); }
-    public static Component proxyManagedServer() { return PREFIX.append(mm.deserialize(SERVER_PROXY_MANAGED)); }
     public static Component serverAlreadyExists() { return PREFIX.append(mm.deserialize(SERVER_ALREADY_EXISTS)); }
+    public static Component noLobbyAvailable() { return PREFIX.append(mm.deserialize(NO_LOBBY_AVAILABLE)); }
+
+    public static Component serverDetailsUpdatedBroadcast(String admin, String serverName) {
+        return PREFIX.append(mm.deserialize(
+                SERVER_DETAILS_UPDATED_BROADCAST,
+                Placeholder.unparsed("admin", admin),
+                Placeholder.unparsed("server", serverName)
+        ));
+    }
 
     // One Variable
     public static Component allServerReloadBroadcast(String admin) {

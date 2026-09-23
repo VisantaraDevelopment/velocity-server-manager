@@ -20,7 +20,7 @@ public class ServerListCommand extends VSMCommand {
         LiteralCommandNode<CommandSource> serverInfoNode = BrigadierCommand.literalArgumentBuilder("serverlist")
             .requires(source -> source.hasPermission("servermanager.servers.list"))
             .executes(context -> {
-                printServerList(context.getSource());
+                runAsync(() -> printServerList(context.getSource()));
                 return Command.SINGLE_SUCCESS;
             }).build();
 

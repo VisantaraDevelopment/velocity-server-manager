@@ -25,22 +25,19 @@ public class ServerInfoCommand extends VSMCommand {
             .requires(source -> source.hasPermission("servermanager.servers.info"))
             .then(BrigadierCommand.requiredArgumentBuilder("server", StringArgumentType.word())
                 .suggests((ctx, builder) -> {
-                    proxy.getAllServers().forEach(server -> builder.suggest(server.getServerInfo().getName()));
+                    suggestRegisteredServers(builder);
                     return builder.buildFuture();
                 })
                 .executes(context -> {
-                    String serverName;
-                    try {
-                        serverName = StringArgumentType.getString(context, "server");
-                    } catch (IllegalArgumentException e) {
-                        return 0;
-                    }
-                    DatabaseRegisteredServer server = MySQL.getServer(serverName);
-                    if (server == null) {
-                        context.getSource().sendMessage(Messages.serverNotFound());
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    server.sendInfo(context.getSource());
+                    runAsync(() -> {
+                        String serverName = StringArgumentType.getString(context, "server");
+                        DatabaseRegisteredServer server = MySQL.getServer(serverName);
+                        if (server == null) {
+                            context.getSource().sendMessage(Messages.serverNotFound());
+                            return;
+                        }
+                        server.sendInfo(context.getSource());
+                    });
                     return Command.SINGLE_SUCCESS;
             })).build();
 

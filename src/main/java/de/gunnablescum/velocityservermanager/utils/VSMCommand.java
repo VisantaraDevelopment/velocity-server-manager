@@ -11,7 +11,10 @@ import net.kyori.adventure.text.Component;
 
 public class VSMCommand {
 
+    protected final ServerManager plugin;
+
     public VSMCommand(ServerManager plugin, CommandManager manager, String... names) {
+        this.plugin = plugin;
         var b = manager.metaBuilder(names[0]);
         for(int i = 1; i < names.length; i++) {
             b.aliases(names[i]);
@@ -44,16 +47,12 @@ public class VSMCommand {
         return name;
     }
 
-    public static boolean checkIfServerProxyManagedOrNull(CommandSource source, DatabaseRegisteredServer server) {
-        if(server == null) {
-            source.sendMessage(Messages.serverNotFound());
-            return true;
-        }
-        if(server.isProxyManaged()) {
-            source.sendMessage(Messages.proxyManagedServer());
-            return true;
-        }
-        return false;
+    protected void runAsync(Runnable operation) {
+        plugin.runAsync(operation);
+    }
+
+    protected static void suggestRegisteredServers(com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        ServerManager.serverRegistry.keySet().forEach(builder::suggest);
     }
 
 }

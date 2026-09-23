@@ -25,21 +25,25 @@ public class DisableServerCommand extends VSMCommand {
             .requires(source -> source.hasPermission("servermanager.servers.flags"))
             .then(BrigadierCommand.requiredArgumentBuilder("server", StringArgumentType.word())
                 .suggests((ctx, builder) -> {
-                    proxyServer.getAllServers().forEach(server -> builder.suggest(server.getServerInfo().getName()));
+                    suggestRegisteredServers(builder);
                     return builder.buildFuture();
                 })
                 .executes(context -> {
-                    String server = StringArgumentType.getString(context, "server");
-                    DatabaseRegisteredServer target = MySQL.getServer(server);
-                    if (checkIfServerProxyManagedOrNull(context.getSource(), target)) return Command.SINGLE_SUCCESS;
-                    //noinspection DataFlowIssue <- This is checked above, probably an IntelliJ bug.
-                    if (!target.active()) {
-                        context.getSource().sendMessage(Messages.noActionCommited());
-                        return Command.SINGLE_SUCCESS;
-                    }
-                    target.empty(true);
-                    target.setActive(false);
-                    sendPermittedBroadcast(Messages.serverDisabledBroadcast(getResponsible(context), server));
+                    runAsync(() -> {
+                        String server = StringArgumentType.getString(context, "server");
+                        DatabaseRegisteredServer target = MySQL.getServer(server);
+                        if (target == null) {
+                            context.getSource().sendMessage(Messages.serverNotFound());
+                            return;
+                        }
+                        if (!target.active()) {
+                            context.getSource().sendMessage(Messages.noActionCommited());
+                            return;
+                        }
+                        target.empty(true);
+                        target.setActive(false);
+                        sendPermittedBroadcast(Messages.serverDisabledBroadcast(getResponsible(context), server));
+                    });
                     return Command.SINGLE_SUCCESS;
                 })).build();
 

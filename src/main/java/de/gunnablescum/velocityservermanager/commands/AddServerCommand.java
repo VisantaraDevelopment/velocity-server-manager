@@ -45,11 +45,16 @@ public class AddServerCommand extends VSMCommand {
     }
 
     private void addServer(CommandContext<CommandSource> context, String server, String host, int port) {
-        if(MySQL.doesServerExist(server)) {
-            context.getSource().sendMessage(Messages.serverAlreadyExists());
-            return;
-        }
-        sendPermittedBroadcast(Messages.serverAddedBroadcast(getResponsible(context), server));
-        MySQL.createServer(server, host, port);
+        runAsync(() -> {
+            if (MySQL.doesServerExist(server)) {
+                context.getSource().sendMessage(Messages.serverAlreadyExists());
+                return;
+            }
+            if (!MySQL.createServer(server, host, port)) {
+                context.getSource().sendMessage(Messages.invalidArgs("SERVER_ADD_FAILED"));
+                return;
+            }
+            sendPermittedBroadcast(Messages.serverAddedBroadcast(getResponsible(context), server));
+        });
     }
 }
