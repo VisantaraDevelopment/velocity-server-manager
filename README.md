@@ -90,7 +90,7 @@ Have fun configuring to your heart's desire.
 - `[flagserver]` - Add a flag to a server
 - `[unflagserver]` - Remove a flag from a server
 - `[clearserver, kickserver]` - Kicks all players from the specific server to a random lobby
-- `[serveradmin restart <server> [estimated-seconds]]` - Announces a restart, moves players evenly across available hubs, and shows a countdown bossbar to players in hubs. The estimate defaults to 120 seconds; after it reaches zero, the bar remains until the server responds to a ping again.
+- `[serveradmin restart <server> [estimated-seconds]]` - Announces a restart, moves players evenly across available hubs, and shows a countdown bossbar to players in hubs. The estimate defaults to 120 seconds; the bar is removed when the countdown reaches zero.
 - `[servermanager]` - A unified command for every action
 
 ## Flags

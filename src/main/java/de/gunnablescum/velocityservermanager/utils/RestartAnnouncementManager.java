@@ -122,6 +122,10 @@ public final class RestartAnnouncementManager {
         private void tick() {
             if (finished.get()) return;
             updateBossBar();
+            if (System.nanoTime() - startedAtNanos >= estimateNanos) {
+                finish();
+                return;
+            }
             syncLobbyViewers();
             pollServer();
         }
