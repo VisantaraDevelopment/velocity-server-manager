@@ -12,7 +12,7 @@ Check out the original Plugin on SpigotMC here: [BungeeServerManager \[BungeeCor
  * Servers are saved in a MySQL Database
  * Receive notifications when servers go online or offline
  * Kick all players from a specific server to a random lobby
- * Redirect players to limbo when their current server kicks them, with lobby fallback
+ * Route kicked players to available hubs first, with limbo fallback when all hubs are offline
  * Announce server restarts with lobby bossbars and balanced player evacuation
  * Manage Server Flags to customize server behavior
  * /hub or /lobby command to go to a lobby server, separate from limbo servers
@@ -36,7 +36,7 @@ You'll need:
 4. Open the generated `mysql.yml` file in a text editor and fill in the details for a valid database connection.
 5. Start your Proxy again. The plugin should connect to the database and create the necessary tables.
 6. Add each managed server with `/addserver <name> <host> <port>`, or adopt a server already listed in `velocity.toml` with `/setserver <name> <host> <port>`. VSM stores its address in the database and applies address changes while the proxy is running.
-7. Mark at least one server as a lobby with `/flagserver <name> lobby`. Mark a limbo server with `/flagserver <name> limbo`; `/hub` ignores limbo servers, while backend kick redirection prefers limbo and falls back to a lobby.
+7. Mark at least one server as a lobby with `/flagserver <name> lobby`. Mark an authentication server as limbo with `/flagserver <name> limbo`; `/hub` ignores limbo servers, and VSM leaves limbo connections and kicks to the authentication plugin.
 8. (Optional) Configure the messages in `messages.yml` to your liking.
 
 You are now ready to use Velocity Server Manager! Have fun managing your servers on the fly, dynamically.
@@ -99,7 +99,7 @@ Flags identify server roles and conditions.
  * `LOBBY (Bitvalue: 1)` - Hub servers. Players are sent here when they join, use `/hub`, and as the first fallback after a backend kick.
  * `RESTRICTED (Bitvalue: 2)` - This server is restricted. Only players with the `servermanager.server.*` or `servermanager.ignorerestriction` permission can join.
  * `DISABLED (Bitvalue: 4)` - This server is disabled. Players cannot join this server, not even staff. If you want this server to be joinable by only staff, use RESTRICTED instead.
- * `LIMBO (Bitvalue: 16)` - A separate server role for limbo servers. Fallbacks use limbo if all hubs are offline; `/hub` never selects limbo.
+ * `LIMBO (Bitvalue: 16)` - A separate server role for limbo and authentication servers. Fallbacks use limbo if all hubs are offline; `/hub` never selects limbo. VSM preserves their initial connections and leaves their kick handling to other plugins.
 
 **NOTE: Flags of Servers are stored in the database. Please do not tamper with the database manually unless you know exactly what you are doing. I will not fix any bugs where the database has been manually tampered with. You are on your own.**
 

@@ -1,6 +1,7 @@
 package de.gunnablescum.velocityservermanager.listener;
 
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import de.gunnablescum.velocityservermanager.ServerManager;
 
@@ -14,12 +15,16 @@ public class ServerKickListener {
         plugin.getProxyServer().getEventManager().register(plugin, this);
     }
 
-    @Subscribe
+    @Subscribe(order = PostOrder.FIRST)
     public void onKick(KickedFromServerEvent event) {
         // If a player was kicked while attempting another server and still has a previous
         // connection, keep Velocity's default behavior so they remain on that previous server.
         if (event.kickedDuringServerConnect() && event.getPlayer().getCurrentServer().isPresent()) return;
         String kickedServer = event.getServer().getServerInfo().getName();
+        if (ServerManager.getManagedServer(kickedServer)
+                .filter(server -> !server.isLimbo())
+                .isEmpty()) return;
+
         ServerManager.getRandomFallbackExcluding(kickedServer)
                 .ifPresent(destination -> event.setResult(KickedFromServerEvent.RedirectPlayer.create(destination)));
     }

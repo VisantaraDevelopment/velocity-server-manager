@@ -148,6 +148,14 @@ public class ServerManager {
         return chooseRandom(availableExcluding(lobbies, serverName));
     }
 
+    public static Optional<DatabaseRegisteredServer> getManagedServer(String serverName) {
+        DatabaseRegisteredServer exactMatch = serverRegistry.get(serverName);
+        if (exactMatch != null) return Optional.of(exactMatch);
+        return serverRegistry.values().stream()
+                .filter(server -> server.name().equalsIgnoreCase(serverName))
+                .findFirst();
+    }
+
     public static Optional<RegisteredServer> getRandomFallback() {
         return chooseRandom(getFallbackCandidatesExcluding(null));
     }
